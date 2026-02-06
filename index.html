@@ -1,0 +1,862 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Durian Tracker">
+  <title>Durian Tree Tracker v12</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+    * { -webkit-tap-highlight-color: transparent; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+    
+    const Camera = ({ size = 24 }) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+        <circle cx="12" cy="13" r="4"/>
+      </svg>
+    );
+    
+    const Edit2 = ({ size = 24 }) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
+      </svg>
+    );
+    
+    const Filter = ({ size = 24 }) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
+      </svg>
+    );
+
+    if (!window.storage) {
+      window.storage = {
+        get: async (key) => {
+          const data = localStorage.getItem(key);
+          return data ? { key, value: data, shared: true } : null;
+        },
+        set: async (key, value) => {
+          localStorage.setItem(key, value);
+          return { key, value, shared: true };
+        },
+        delete: async (key) => {
+          localStorage.removeItem(key);
+          return { key, deleted: true, shared: true };
+        },
+        list: async (prefix) => {
+          const keys = Object.keys(localStorage).filter(k => k.startsWith(prefix || ''));
+          return { keys, prefix, shared: true };
+        }
+      };
+    }
+
+    function DurianTreeTracker() {
+      const [allTrees, setAllTrees] = useState([]);
+      const [selectedTreeId, setSelectedTreeId] = useState('');
+      const [typeFilter, setTypeFilter] = useState('all');
+      const [statusFilter, setStatusFilter] = useState('all');
+      const [isLoading, setIsLoading] = useState(true);
+      const [showSicknessForm, setShowSicknessForm] = useState(false);
+      const [showTreatmentForm, setShowTreatmentForm] = useState(false);
+      const [showFloweringForm, setShowFloweringForm] = useState(false);
+      const [showFruitingForm, setShowFruitingForm] = useState(false);
+      const [editingSicknessId, setEditingSicknessId] = useState(null);
+      const [editingTreatmentId, setEditingTreatmentId] = useState(null);
+      const [editingFloweringId, setEditingFloweringId] = useState(null);
+      const [editingFruitingId, setEditingFruitingId] = useState(null);
+      const [sicknessPhotos, setSicknessPhotos] = useState([]);
+      const [dateIdentified, setDateIdentified] = useState('');
+      const [sicknessNotes, setSicknessNotes] = useState('');
+      const [employeeName, setEmployeeName] = useState('');
+      const [treatmentPhotos, setTreatmentPhotos] = useState([]);
+      const [treatmentRecommended, setTreatmentRecommended] = useState('');
+      const [treatmentCompleted, setTreatmentCompleted] = useState('');
+      const [treatmentDate, setTreatmentDate] = useState('');
+      const [replantingRequired, setReplantingRequired] = useState('no');
+      const [hasRecovered, setHasRecovered] = useState('no');
+      const [treatmentEmployee, setTreatmentEmployee] = useState('');
+      const [floweringPhotos, setFloweringPhotos] = useState([]);
+      const [floweringDate, setFloweringDate] = useState('');
+      const [floweringStatus, setFloweringStatus] = useState('no');
+      const [floweringNotes, setFloweringNotes] = useState('');
+      const [floweringEmployee, setFloweringEmployee] = useState('');
+      const [fruitingPhotos, setFruitingPhotos] = useState([]);
+      const [fruitingDate, setFruitingDate] = useState('');
+      const [fruitingStatus, setFruitingStatus] = useState('no');
+      const [fruitingNotes, setFruitingNotes] = useState('');
+      const [fruitingEmployee, setFruitingEmployee] = useState('');
+
+      useEffect(() => { initializeTrees(); }, []);
+
+      const initializeTrees = async () => {
+        const sampleTrees = [];
+        for (let i = 1; i <= 10; i++) {
+          sampleTrees.push({
+            id: `A${10000 + i}`,
+            treeNumber: `A${10000 + i}`,
+            treeType: '',
+            generalPhotos: [],
+            sicknessLogs: [],
+            treatmentLogs: [],
+            floweringLogs: [],
+            fruitingLogs: [],
+            status: 'healthy'
+          });
+        }
+        try {
+          for (const tree of sampleTrees) {
+            try {
+              const saved = await window.storage.get(`tree-v2:${tree.id}`, true);
+              if (saved) Object.assign(tree, JSON.parse(saved.value));
+            } catch (e) {}
+          }
+        } catch (e) {}
+        sampleTrees.forEach(tree => { tree.status = calculateTreeStatus(tree); });
+        setAllTrees(sampleTrees);
+        setIsLoading(false);
+      };
+
+      const calculateTreeStatus = (tree) => {
+        if (tree.sicknessLogs?.length > 0 && tree.treatmentLogs?.length === 0) return 'sick';
+        if (tree.treatmentLogs?.length > 0) {
+          const sorted = [...tree.treatmentLogs].sort((a, b) => new Date(b.timestamp || b.treatmentDate) - new Date(a.timestamp || a.treatmentDate));
+          return sorted[0].hasRecovered === 'yes' ? 'healthy' : 'sick';
+        }
+        return 'healthy';
+      };
+
+      const saveTree = async (tree) => {
+        try {
+          const updated = { ...tree, status: calculateTreeStatus(tree) };
+          await window.storage.set(`tree-v2:${tree.id}`, JSON.stringify(updated), true);
+          setAllTrees(prev => prev.map(t => t.id === tree.id ? updated : t));
+        } catch (e) { alert('Error saving'); }
+      };
+
+      const handlePhotoUpload = (e, setter) => {
+        Array.from(e.target.files).forEach(file => {
+          const reader = new FileReader();
+          reader.onloadend = () => setter(prev => [...prev, reader.result]);
+          reader.readAsDataURL(file);
+        });
+      };
+
+      const handleGeneralPhotoUpload = async (e) => {
+        const tree = allTrees.find(t => t.id === selectedTreeId);
+        if (!tree) return;
+        const newPhotos = [];
+        for (const file of Array.from(e.target.files)) {
+          await new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => { newPhotos.push(reader.result); resolve(); };
+            reader.readAsDataURL(file);
+          });
+        }
+        await saveTree({ ...tree, generalPhotos: [...(tree.generalPhotos || []), ...newPhotos] });
+      };
+
+      const updateTreeType = async (type) => {
+        const tree = allTrees.find(t => t.id === selectedTreeId);
+        if (tree) await saveTree({ ...tree, treeType: type });
+      };
+
+      const submitSickness = async () => {
+        if (!dateIdentified || !sicknessNotes || !employeeName) return alert('Fill required fields');
+        const tree = allTrees.find(t => t.id === selectedTreeId);
+        if (!tree) return;
+        const logs = editingSicknessId
+          ? tree.sicknessLogs.map(log => log.id === editingSicknessId ? { ...log, dateIdentified, photos: sicknessPhotos.length > 0 ? sicknessPhotos : log.photos, notes: sicknessNotes, employeeName } : log)
+          : [...(tree.sicknessLogs || []), { id: `sickness-${Date.now()}`, dateIdentified, photos: sicknessPhotos, notes: sicknessNotes, employeeName, timestamp: new Date().toISOString() }];
+        await saveTree({ ...tree, sicknessLogs: logs });
+        resetSicknessForm();
+      };
+
+      const submitTreatment = async () => {
+        if (!treatmentRecommended || !treatmentEmployee) return alert('Fill required fields');
+        const tree = allTrees.find(t => t.id === selectedTreeId);
+        if (!tree) return;
+        const logs = editingTreatmentId
+          ? tree.treatmentLogs.map(log => log.id === editingTreatmentId ? { ...log, treatmentRecommended, treatmentCompleted, treatmentDate, replantingRequired, hasRecovered, photos: treatmentPhotos.length > 0 ? treatmentPhotos : log.photos, employeeName: treatmentEmployee } : log)
+          : [...(tree.treatmentLogs || []), { id: `treatment-${Date.now()}`, treatmentRecommended, treatmentCompleted, treatmentDate, replantingRequired, hasRecovered, photos: treatmentPhotos, employeeName: treatmentEmployee, timestamp: new Date().toISOString() }];
+        await saveTree({ ...tree, treatmentLogs: logs });
+        resetTreatmentForm();
+      };
+
+      const submitFlowering = async () => {
+        if (!floweringDate || !floweringEmployee) return alert('Fill required fields');
+        const tree = allTrees.find(t => t.id === selectedTreeId);
+        if (!tree) return;
+        const logs = editingFloweringId
+          ? tree.floweringLogs.map(log => log.id === editingFloweringId ? { ...log, date: floweringDate, status: floweringStatus, photos: floweringPhotos.length > 0 ? floweringPhotos : log.photos, notes: floweringNotes, employeeName: floweringEmployee } : log)
+          : [...(tree.floweringLogs || []), { id: `flowering-${Date.now()}`, date: floweringDate, status: floweringStatus, photos: floweringPhotos, notes: floweringNotes, employeeName: floweringEmployee, timestamp: new Date().toISOString() }];
+        await saveTree({ ...tree, floweringLogs: logs });
+        resetFloweringForm();
+      };
+
+      const submitFruiting = async () => {
+        if (!fruitingDate || !fruitingEmployee) return alert('Fill required fields');
+        const tree = allTrees.find(t => t.id === selectedTreeId);
+        if (!tree) return;
+        const logs = editingFruitingId
+          ? tree.fruitingLogs.map(log => log.id === editingFruitingId ? { ...log, date: fruitingDate, status: fruitingStatus, photos: fruitingPhotos.length > 0 ? fruitingPhotos : log.photos, notes: fruitingNotes, employeeName: fruitingEmployee } : log)
+          : [...(tree.fruitingLogs || []), { id: `fruiting-${Date.now()}`, date: fruitingDate, status: fruitingStatus, photos: fruitingPhotos, notes: fruitingNotes, employeeName: fruitingEmployee, timestamp: new Date().toISOString() }];
+        await saveTree({ ...tree, fruitingLogs: logs });
+        resetFruitingForm();
+      };
+
+      const resetSicknessForm = () => { setSicknessPhotos([]); setDateIdentified(''); setSicknessNotes(''); setEmployeeName(''); setShowSicknessForm(false); setEditingSicknessId(null); };
+      const resetTreatmentForm = () => { setTreatmentPhotos([]); setTreatmentRecommended(''); setTreatmentCompleted(''); setTreatmentDate(''); setReplantingRequired('no'); setHasRecovered('no'); setTreatmentEmployee(''); setShowTreatmentForm(false); setEditingTreatmentId(null); };
+      const resetFloweringForm = () => { setFloweringPhotos([]); setFloweringDate(''); setFloweringStatus('no'); setFloweringNotes(''); setFloweringEmployee(''); setShowFloweringForm(false); setEditingFloweringId(null); };
+      const resetFruitingForm = () => { setFruitingPhotos([]); setFruitingDate(''); setFruitingStatus('no'); setFruitingNotes(''); setFruitingEmployee(''); setShowFruitingForm(false); setEditingFruitingId(null); };
+
+      const selectedTree = allTrees.find(t => t.id === selectedTreeId);
+
+      const filteredTrees = allTrees.filter(tree => {
+        const matchesType = typeFilter === 'all' || tree.treeType === typeFilter;
+        const matchesStatus = (() => {
+          if (statusFilter === 'all') return true;
+          if (statusFilter === 'healthy') return tree.status === 'healthy';
+          if (statusFilter === 'sick') return tree.status === 'sick';
+          if (statusFilter === 'flowering') {
+            if (!tree.floweringLogs || tree.floweringLogs.length === 0) return false;
+            const sorted = [...tree.floweringLogs].sort((a, b) => new Date(b.timestamp || b.date) - new Date(a.timestamp || a.date));
+            return sorted[0].status === 'some' || sorted[0].status === 'heavy';
+          }
+          if (statusFilter === 'fruiting') {
+            if (!tree.fruitingLogs || tree.fruitingLogs.length === 0) return false;
+            const sorted = [...tree.fruitingLogs].sort((a, b) => new Date(b.timestamp || b.date) - new Date(a.timestamp || a.date));
+            return sorted[0].status === 'some' || sorted[0].status === 'many';
+          }
+          return true;
+        })();
+        return matchesType && matchesStatus;
+      });
+
+      if (isLoading) return React.createElement('div', { className: 'min-h-screen bg-green-50 flex items-center justify-center' }, React.createElement('div', { className: 'text-green-700' }, 'Loading...'));
+
+      return React.createElement('div', { className: 'min-h-screen bg-green-50 pb-20' },
+        React.createElement('div', { className: 'bg-green-700 text-white p-4 shadow-lg' },
+          React.createElement('h1', { className: 'text-xl font-bold' }, '🌳 Durian Tree Tracker v12'),
+          React.createElement('p', { className: 'text-sm text-green-100' }, 'Plantation Monitor')
+        ),
+        React.createElement('div', { className: 'p-4 space-y-4' },
+          React.createElement('div', { className: 'bg-white rounded-lg shadow p-4' },
+            React.createElement('div', { className: 'flex items-center gap-2 mb-3' },
+              React.createElement(Filter, { size: 18 }),
+              React.createElement('h3', { className: 'font-semibold' }, 'Filters')
+            ),
+            React.createElement('div', { className: 'space-y-3' },
+              React.createElement('div', null,
+                React.createElement('label', { className: 'block text-xs font-medium mb-1' }, 'Tree Type'),
+                React.createElement('div', { className: 'grid grid-cols-4 gap-2' },
+                  ['all', 'MK', 'BT', 'Others'].map(type => 
+                    React.createElement('button', {
+                      key: type,
+                      onClick: () => setTypeFilter(type),
+                      className: `py-2 px-3 rounded text-sm ${typeFilter === type ? 'bg-blue-600 text-white' : 'bg-gray-100'}`
+                    }, type === 'all' ? 'All' : type)
+                  )
+                )
+              ),
+              React.createElement('div', null,
+                React.createElement('label', { className: 'block text-xs font-medium mb-1' }, 'Status'),
+                React.createElement('div', { className: 'grid grid-cols-3 gap-2' },
+                  React.createElement('button', { onClick: () => setStatusFilter('all'), className: `py-2 rounded text-xs ${statusFilter === 'all' ? 'bg-blue-600 text-white' : 'bg-gray-100'}` }, 'All'),
+                  React.createElement('button', { onClick: () => setStatusFilter('healthy'), className: `py-2 rounded text-xs ${statusFilter === 'healthy' ? 'bg-green-600 text-white' : 'bg-gray-100'}` }, 'Healthy'),
+                  React.createElement('button', { onClick: () => setStatusFilter('sick'), className: `py-2 rounded text-xs ${statusFilter === 'sick' ? 'bg-red-600 text-white' : 'bg-gray-100'}` }, 'Sick'),
+                  React.createElement('button', { onClick: () => setStatusFilter('flowering'), className: `py-2 rounded text-xs ${statusFilter === 'flowering' ? 'bg-purple-600 text-white' : 'bg-gray-100'}` }, 'Flowering'),
+                  React.createElement('button', { onClick: () => setStatusFilter('fruiting'), className: `py-2 rounded text-xs ${statusFilter === 'fruiting' ? 'bg-orange-600 text-white' : 'bg-gray-100'}` }, 'Fruiting')
+                )
+              )
+            )
+          ),
+          React.createElement('div', null,
+            React.createElement('label', { className: 'block text-sm font-medium mb-2' }, 'Select Tree'),
+            React.createElement('select', {
+              value: selectedTreeId,
+              onChange: (e) => setSelectedTreeId(e.target.value),
+              className: 'w-full px-4 py-3 rounded-lg border'
+            },
+              React.createElement('option', { value: '' }, '-- Select a tree --'),
+              filteredTrees.map(tree =>
+                React.createElement('option', { key: tree.id, value: tree.id },
+                  `${tree.treeNumber} ${tree.treeType ? `(${tree.treeType})` : ''} ${tree.status === 'sick' ? '🤒' : '✅'}`
+                )
+              )
+            )
+          ),
+          selectedTree && React.createElement('div', { className: 'space-y-4' },
+            React.createElement('div', { className: 'bg-white rounded-lg shadow p-4' },
+              React.createElement('div', { className: 'flex justify-between items-center mb-3' },
+                React.createElement('h2', { className: 'text-2xl font-bold text-green-800' }, selectedTree.treeNumber),
+                React.createElement('span', {
+                  className: `px-3 py-1 rounded-full text-sm ${selectedTree.status === 'sick' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}`
+                }, selectedTree.status === 'sick' ? '🤒 Sick' : '✅ Healthy')
+              ),
+              React.createElement('div', null,
+                React.createElement('label', { className: 'block text-sm font-medium mb-2' }, 'Tree Type'),
+                React.createElement('div', { className: 'flex gap-2' },
+                  ['MK', 'BT', 'Others'].map(type =>
+                    React.createElement('button', {
+                      key: type,
+                      onClick: () => updateTreeType(type),
+                      className: `flex-1 py-2 rounded ${selectedTree.treeType === type ? 'bg-blue-600 text-white' : 'bg-gray-100'}`
+                    }, type)
+                  )
+                )
+              )
+            ),
+            React.createElement('div', { className: 'bg-white rounded-lg shadow p-4' },
+              React.createElement('h3', { className: 'font-semibold mb-3' }, 'General Photos'),
+              React.createElement('div', { className: 'border-2 border-dashed rounded-lg p-4 text-center mb-3' },
+                React.createElement('input', {
+                  type: 'file',
+                  accept: 'image/*',
+                  multiple: true,
+                  capture: 'environment',
+                  onChange: handleGeneralPhotoUpload,
+                  className: 'hidden',
+                  id: 'gen'
+                }),
+                React.createElement('label', { htmlFor: 'gen', className: 'cursor-pointer' },
+                  React.createElement(Camera, { size: 32, className: 'mx-auto mb-2 text-gray-400' }),
+                  React.createElement('p', { className: 'text-sm' }, 'Add photos')
+                )
+              ),
+              selectedTree.generalPhotos?.length > 0 && React.createElement('div', { className: 'grid grid-cols-3 gap-2' },
+                selectedTree.generalPhotos.map((p, i) =>
+                  React.createElement('img', { key: i, src: p, alt: '', className: 'w-full h-24 object-cover rounded' })
+                )
+              )
+            ),
+            React.createElement('div', { className: 'bg-white rounded-lg shadow p-4' },
+              React.createElement('div', { className: 'flex justify-between mb-3' },
+                React.createElement('h3', { className: 'font-semibold' }, 'Sickness Logs'),
+                React.createElement('button', {
+                  onClick: () => setShowSicknessForm(!showSicknessForm),
+                  className: 'px-3 py-1 bg-red-600 text-white rounded text-sm'
+                }, showSicknessForm ? 'Cancel' : '+ Log')
+              ),
+              showSicknessForm && React.createElement('div', { className: 'mb-4 p-4 bg-red-50 rounded space-y-3' },
+                React.createElement('input', {
+                  type: 'date',
+                  value: dateIdentified,
+                  onChange: (e) => setDateIdentified(e.target.value),
+                  className: 'w-full px-3 py-2 rounded border'
+                }),
+                React.createElement('input', {
+                  type: 'file',
+                  accept: 'image/*',
+                  multiple: true,
+                  onChange: (e) => handlePhotoUpload(e, setSicknessPhotos),
+                  className: 'w-full text-sm'
+                }),
+                sicknessPhotos.length > 0 && React.createElement('div', { className: 'grid grid-cols-3 gap-2' },
+                  sicknessPhotos.map((p, i) =>
+                    React.createElement('img', { key: i, src: p, alt: '', className: 'w-full h-20 object-cover rounded' })
+                  )
+                ),
+                React.createElement('textarea', {
+                  value: sicknessNotes,
+                  onChange: (e) => setSicknessNotes(e.target.value),
+                  rows: 3,
+                  placeholder: 'Notes',
+                  className: 'w-full px-3 py-2 rounded border'
+                }),
+                React.createElement('input', {
+                  type: 'text',
+                  value: employeeName,
+                  onChange: (e) => setEmployeeName(e.target.value),
+                  placeholder: 'Your name',
+                  className: 'w-full px-3 py-2 rounded border'
+                }),
+                React.createElement('div', { className: 'flex gap-2' },
+                  React.createElement('button', {
+                    onClick: resetSicknessForm,
+                    className: 'flex-1 px-4 py-2 bg-gray-200 rounded'
+                  }, 'Cancel'),
+                  React.createElement('button', {
+                    onClick: submitSickness,
+                    className: 'flex-1 px-4 py-2 bg-red-600 text-white rounded'
+                  }, 'Save')
+                )
+              ),
+              React.createElement('div', { className: 'space-y-3' },
+                selectedTree.sicknessLogs?.length > 0 ? selectedTree.sicknessLogs.map(log =>
+                  React.createElement('div', { key: log.id, className: 'border border-red-200 rounded p-3 bg-red-50' },
+                    React.createElement('div', { className: 'flex justify-between mb-2' },
+                      React.createElement('div', { className: 'text-sm font-medium text-red-800' },
+                        new Date(log.dateIdentified).toLocaleDateString()
+                      ),
+                      React.createElement('button', {
+                        onClick: () => {
+                          setEditingSicknessId(log.id);
+                          setDateIdentified(log.dateIdentified);
+                          setSicknessPhotos(log.photos || []);
+                          setSicknessNotes(log.notes);
+                          setEmployeeName(log.employeeName);
+                          setShowSicknessForm(true);
+                        },
+                        className: 'text-blue-600'
+                      }, React.createElement(Edit2, { size: 16 }))
+                    ),
+                    log.photos?.length > 0 && React.createElement('div', { className: 'grid grid-cols-3 gap-1 mb-2' },
+                      log.photos.map((p, i) =>
+                        React.createElement('img', { key: i, src: p, alt: '', className: 'w-full h-16 object-cover rounded' })
+                      )
+                    ),
+                    React.createElement('p', { className: 'text-sm mb-1' }, log.notes),
+                    React.createElement('p', { className: 'text-xs text-gray-500' }, `By: ${log.employeeName}`)
+                  )
+                ) : React.createElement('p', { className: 'text-sm text-gray-500 text-center py-4' }, 'No logs')
+              )
+            ),
+            React.createElement('div', { className: 'bg-white rounded-lg shadow p-4' },
+              React.createElement('div', { className: 'flex justify-between mb-3' },
+                React.createElement('h3', { className: 'font-semibold' }, 'Treatment Logs'),
+                React.createElement('button', {
+                  onClick: () => setShowTreatmentForm(!showTreatmentForm),
+                  className: 'px-3 py-1 bg-green-600 text-white rounded text-sm'
+                }, showTreatmentForm ? 'Cancel' : '+ Log')
+              ),
+              showTreatmentForm && React.createElement('div', { className: 'mb-4 p-4 bg-green-50 rounded space-y-3' },
+                React.createElement('textarea', {
+                  value: treatmentRecommended,
+                  onChange: (e) => setTreatmentRecommended(e.target.value),
+                  rows: 2,
+                  placeholder: 'Recommended',
+                  className: 'w-full px-3 py-2 rounded border'
+                }),
+                React.createElement('textarea', {
+                  value: treatmentCompleted,
+                  onChange: (e) => setTreatmentCompleted(e.target.value),
+                  rows: 2,
+                  placeholder: 'Progress',
+                  className: 'w-full px-3 py-2 rounded border'
+                }),
+                React.createElement('input', {
+                  type: 'date',
+                  value: treatmentDate,
+                  onChange: (e) => setTreatmentDate(e.target.value),
+                  className: 'w-full px-3 py-2 rounded border'
+                }),
+                React.createElement('input', {
+                  type: 'file',
+                  accept: 'image/*',
+                  multiple: true,
+                  onChange: (e) => handlePhotoUpload(e, setTreatmentPhotos),
+                  className: 'w-full text-sm'
+                }),
+                treatmentPhotos.length > 0 && React.createElement('div', { className: 'grid grid-cols-3 gap-2' },
+                  treatmentPhotos.map((p, i) =>
+                    React.createElement('img', { key: i, src: p, alt: '', className: 'w-full h-20 object-cover rounded' })
+                  )
+                ),
+                React.createElement('div', null,
+                  React.createElement('label', { className: 'block text-sm mb-1' }, 'Replanting?'),
+                  React.createElement('div', { className: 'flex gap-4' },
+                    React.createElement('label', null,
+                    React.createElement('input', {
+                        type: 'radio',
+                        value: 'no',
+                        checked: replantingRequired === 'no',
+                        onChange: (e) => setReplantingRequired(e.target.value),
+                        className: 'mr-2'
+                      }),
+                      'No'
+                    ),
+                    React.createElement('label', null,
+                      React.createElement('input', {
+                        type: 'radio',
+                        value: 'yes',
+                        checked: replantingRequired === 'yes',
+                        onChange: (e) => setReplantingRequired(e.target.value),
+                        className: 'mr-2'
+                      }),
+                      'Yes'
+                    )
+                  )
+                ),   
+'radio',
+                        value: 'no',
+                        checked: replantingRequired === 'no',
+                        onChange: (e) => setReplantingRequired(e.target.value),
+                        className: 'mr-2'
+                      }),
+                      'No'
+                    ),
+                    React.createElement('label', null,
+                      React.createElement('input', {
+                        type: 'radio',
+                        value: 'yes',
+                        checked: replantingRequired === 'yes',
+                        onChange: (e) => setReplantingRequired(e.target.value),
+                        className: 'mr-2'
+                      }),
+                      'Yes'
+                    )
+                  )
+                ),
+                React.createElement('div', null,
+                  React.createElement('label', { className: 'block text-sm mb-1' }, 'Recovered?'),
+                  React.createElement('div', { className: 'flex gap-4' },
+                    React.createElement('label', null,
+                      React.createElement('input', {
+                        type: 'radio',
+                        value: 'no',
+                        checked: hasRecovered === 'no',
+                        onChange: (e) => setHasRecovered(e.target.value),
+                        className: 'mr-2'
+                      }),
+                      'No'
+                    ),
+                    React.createElement('label', null,
+                      React.createElement('input', {
+                        type: 'radio',
+                        value: 'yes',
+                        checked: hasRecovered === 'yes',
+                        onChange: (e) => setHasRecovered(e.target.value),
+                        className: 'mr-2'
+                      }),
+                      'Yes'
+                    )
+                  )
+                ),
+                React.createElement('input', {
+                  type: 'text',
+                  value: treatmentEmployee,
+                  onChange: (e) => setTreatmentEmployee(e.target.value),
+                  placeholder: 'Your name',
+                  className: 'w-full px-3 py-2 rounded border'
+                }),
+                React.createElement('div', { className: 'flex gap-2' },
+                  React.createElement('button', {
+                    onClick: resetTreatmentForm,
+                    className: 'flex-1 px-4 py-2 bg-gray-200 rounded'
+                  }, 'Cancel'),
+                  React.createElement('button', {
+                    onClick: submitTreatment,
+                    className: 'flex-1 px-4 py-2 bg-green-600 text-white rounded'
+                  }, 'Save')
+                )
+              ),
+              React.createElement('div', { className: 'space-y-3' },
+                selectedTree.treatmentLogs?.length > 0 ? selectedTree.treatmentLogs.map(log =>
+                  React.createElement('div', { key: log.id, className: 'border border-green-200 rounded p-3 bg-green-50' },
+                    React.createElement('div', { className: 'flex justify-between mb-2' },
+                      React.createElement('div', { className: 'text-sm font-medium' },
+                        log.treatmentDate ? new Date(log.treatmentDate).toLocaleDateString() : 'No date'
+                      ),
+                      React.createElement('button', {
+                        onClick: () => {
+                          setEditingTreatmentId(log.id);
+                          setTreatmentRecommended(log.treatmentRecommended);
+                          setTreatmentCompleted(log.treatmentCompleted || '');
+                          setTreatmentDate(log.treatmentDate || '');
+                          setReplantingRequired(log.replantingRequired);
+                          setHasRecovered(log.hasRecovered);
+                          setTreatmentPhotos(log.photos || []);
+                          setTreatmentEmployee(log.employeeName);
+                          setShowTreatmentForm(true);
+                        },
+                        className: 'text-blue-600'
+                      }, React.createElement(Edit2, { size: 16 }))
+                    ),
+                    log.photos?.length > 0 && React.createElement('div', { className: 'grid grid-cols-3 gap-1 mb-2' },
+                      log.photos.map((p, i) =>
+                        React.createElement('img', { key: i, src: p, alt: '', className: 'w-full h-16 object-cover rounded' })
+                      )
+                    ),
+                    React.createElement('div', { className: 'space-y-1 text-sm' },
+                      React.createElement('p', null,
+                        React.createElement('span', { className: 'font-medium' }, 'Recommended: '),
+                        log.treatmentRecommended
+                      ),
+                      log.treatmentCompleted && React.createElement('p', null,
+                        React.createElement('span', { className: 'font-medium' }, 'Progress: '),
+                        log.treatmentCompleted
+                      ),
+                      React.createElement('p', null,
+                        React.createElement('span', { className: 'font-medium' }, 'Replanting: '),
+                        log.replantingRequired === 'yes' ? '🟠 Yes' : '✅ No'
+                      ),
+                      React.createElement('p', null,
+                        React.createElement('span', { className: 'font-medium' }, 'Recovered: '),
+                        log.hasRecovered === 'yes' ? '✅ Yes' : '🤒 No'
+                      ),
+                      React.createElement('p', { className: 'text-xs text-gray-500' }, `By: ${log.employeeName}`)
+                    )
+                  )
+                ) : React.createElement('p', { className: 'text-sm text-gray-500 text-center py-4' }, 'No logs')
+              )
+            ),
+            React.createElement('div', { className: 'bg-white rounded-lg shadow p-4' },
+              React.createElement('div', { className: 'flex justify-between mb-3' },
+                React.createElement('h3', { className: 'font-semibold' }, 'Flowering Logs'),
+                React.createElement('button', {
+                  onClick: () => setShowFloweringForm(!showFloweringForm),
+                  className: 'px-3 py-1 bg-purple-600 text-white rounded text-sm'
+                }, showFloweringForm ? 'Cancel' : '+ Log')
+              ),
+              showFloweringForm && React.createElement('div', { className: 'mb-4 p-4 bg-purple-50 rounded space-y-3' },
+                React.createElement('input', {
+                  type: 'date',
+                  value: floweringDate,
+                  onChange: (e) => setFloweringDate(e.target.value),
+                  className: 'w-full px-3 py-2 rounded border'
+                }),
+                React.createElement('div', null,
+                  React.createElement('label', { className: 'block text-sm mb-1' }, 'Status'),
+                  React.createElement('div', { className: 'flex gap-2' },
+                    React.createElement('label', { className: 'flex items-center' },
+                      React.createElement('input', {
+                        type: 'radio',
+                        value: 'no',
+                        checked: floweringStatus === 'no',
+                        onChange: (e) => setFloweringStatus(e.target.value),
+                        className: 'mr-1'
+                      }),
+                      'No'
+                    ),
+                    React.createElement('label', { className: 'flex items-center' },
+                      React.createElement('input', {
+                        type: 'radio',
+                        value: 'some',
+                        checked: floweringStatus === 'some',
+                        onChange: (e) => setFloweringStatus(e.target.value),
+                        className: 'mr-1'
+                      }),
+                      'Some'
+                    ),
+                    React.createElement('label', { className: 'flex items-center' },
+                      React.createElement('input', {
+                        type: 'radio',
+                        value: 'heavy',
+                        checked: floweringStatus === 'heavy',
+                        onChange: (e) => setFloweringStatus(e.target.value),
+                        className: 'mr-1'
+                      }),
+                      'Heavy'
+                    )
+                  )
+                ),
+                React.createElement('input', {
+                  type: 'file',
+                  accept: 'image/*',
+                  multiple: true,
+                  onChange: (e) => handlePhotoUpload(e, setFloweringPhotos),
+                  className: 'w-full text-sm'
+                }),
+                floweringPhotos.length > 0 && React.createElement('div', { className: 'grid grid-cols-3 gap-2' },
+                  floweringPhotos.map((p, i) =>
+                    React.createElement('img', { key: i, src: p, alt: '', className: 'w-full h-20 object-cover rounded' })
+                  )
+                ),
+                React.createElement('textarea', {
+                  value: floweringNotes,
+                  onChange: (e) => setFloweringNotes(e.target.value),
+                  rows: 2,
+                  placeholder: 'Notes',
+                  className: 'w-full px-3 py-2 rounded border'
+                }),
+                React.createElement('input', {
+                  type: 'text',
+                  value: floweringEmployee,
+                  onChange: (e) => setFloweringEmployee(e.target.value),
+                  placeholder: 'Your name',
+                  className: 'w-full px-3 py-2 rounded border'
+                }),
+                React.createElement('div', { className: 'flex gap-2' },
+                  React.createElement('button', {
+                    onClick: resetFloweringForm,
+                    className: 'flex-1 px-4 py-2 bg-gray-200 rounded'
+                  }, 'Cancel'),
+                  React.createElement('button', {
+                    onClick: submitFlowering,
+                    className: 'flex-1 px-4 py-2 bg-purple-600 text-white rounded'
+                  }, 'Save')
+                )
+              ),
+              React.createElement('div', { className: 'space-y-3' },
+                selectedTree.floweringLogs?.length > 0 ? selectedTree.floweringLogs.map(log =>
+                  React.createElement('div', { key: log.id, className: 'border border-purple-200 rounded p-3 bg-purple-50' },
+                    React.createElement('div', { className: 'flex justify-between mb-2' },
+                      React.createElement('div', { className: 'text-sm font-medium' },
+                        new Date(log.date).toLocaleDateString()
+                      ),
+                      React.createElement('button', {
+                        onClick: () => {
+                          setEditingFloweringId(log.id);
+                          setFloweringDate(log.date);
+                          setFloweringStatus(log.status);
+                          setFloweringPhotos(log.photos || []);
+                          setFloweringNotes(log.notes || '');
+                          setFloweringEmployee(log.employeeName);
+                          setShowFloweringForm(true);
+                        },
+                        className: 'text-blue-600'
+                      }, React.createElement(Edit2, { size: 16 }))
+                    ),
+                    log.photos?.length > 0 && React.createElement('div', { className: 'grid grid-cols-3 gap-1 mb-2' },
+                      log.photos.map((p, i) =>
+                        React.createElement('img', { key: i, src: p, alt: '', className: 'w-full h-16 object-cover rounded' })
+                      )
+                    ),
+                    React.createElement('p', { className: 'text-sm mb-1' },
+                      React.createElement('span', { className: 'font-medium' }, 'Status: '),
+                      log.status === 'no' ? 'No flowering' : log.status === 'some' ? 'Some flowering' : 'Heavy flowering'
+                    ),
+                    log.notes && React.createElement('p', { className: 'text-sm mb-1' }, log.notes),
+                    React.createElement('p', { className: 'text-xs text-gray-500' }, `By: ${log.employeeName}`)
+                  )
+                ) : React.createElement('p', { className: 'text-sm text-gray-500 text-center py-4' }, 'No logs')
+              )
+            ),
+            React.createElement('div', { className: 'bg-white rounded-lg shadow p-4' },
+              React.createElement('div', { className: 'flex justify-between mb-3' },
+                React.createElement('h3', { className: 'font-semibold' }, 'Fruiting Logs'),
+                React.createElement('button', {
+                  onClick: () => setShowFruitingForm(!showFruitingForm),
+                  className: 'px-3 py-1 bg-orange-600 text-white rounded text-sm'
+                }, showFruitingForm ? 'Cancel' : '+ Log')
+              ),
+              showFruitingForm && React.createElement('div', { className: 'mb-4 p-4 bg-orange-50 rounded space-y-3' },
+                React.createElement('input', {
+                  type: 'date',
+                  value: fruitingDate,
+                  onChange: (e) => setFruitingDate(e.target.value),
+                  className: 'w-full px-3 py-2 rounded border'
+                }),
+                React.createElement('div', null,
+                  React.createElement('label', { className: 'block text-sm mb-1' }, 'Status'),
+                  React.createElement('div', { className: 'flex gap-2' },
+                    React.createElement('label', { className: 'flex items-center' },
+                      React.createElement('input', {
+                        type: 'radio',
+                        value: 'no',
+                        checked: fruitingStatus === 'no',
+                        onChange: (e) => setFruitingStatus(e.target.value),
+                        className: 'mr-1'
+                      }),
+                      'No'
+                    ),
+                    React.createElement('label', { className: 'flex items-center' },
+                      React.createElement('input', {
+                        type: 'radio',
+                        value: 'some',
+                        checked: fruitingStatus === 'some',
+                        onChange: (e) => setFruitingStatus(e.target.value),
+                        className: 'mr-1'
+                      }),
+                      'Some'
+                    ),
+                    React.createElement('label', { className: 'flex items-center' },
+                      React.createElement('input', {
+                        type: 'radio',
+                        value: 'many',
+                        checked: fruitingStatus === 'many',
+                        onChange: (e) => setFruitingStatus(e.target.value),
+                        className: 'mr-1'
+                      }),
+                      'Many'
+                    )
+                  )
+                ),
+                React.createElement('input', {
+                  type: 'file',
+                  accept: 'image/*',
+                  multiple: true,
+                  onChange: (e) => handlePhotoUpload(e, setFruitingPhotos),
+                  className: 'w-full text-sm'
+                }),
+                fruitingPhotos.length > 0 && React.createElement('div', { className: 'grid grid-cols-3 gap-2' },
+                  fruitingPhotos.map((p, i) =>
+                    React.createElement('img', { key: i, src: p, alt: '', className: 'w-full h-20 object-cover rounded' })
+                  )
+                ),
+                React.createElement('textarea', {
+                  value: fruitingNotes,
+                  onChange: (e) => setFruitingNotes(e.target.value),
+                  rows: 2,
+                  placeholder: 'Notes',
+                  className: 'w-full px-3 py-2 rounded border'
+                }),
+                React.createElement('input', {
+                  type: 'text',
+                  value: fruitingEmployee,
+                  onChange: (e) => setFruitingEmployee(e.target.value),
+                  placeholder: 'Your name',
+                  className: 'w-full px-3 py-2 rounded border'
+                }),
+                React.createElement('div', { className: 'flex gap-2' },
+                  React.createElement('button', {
+                    onClick: resetFruitingForm,
+                    className: 'flex-1 px-4 py-2 bg-gray-200 rounded'
+                  }, 'Cancel'),
+                  React.createElement('button', {
+                    onClick: submitFruiting,
+                    className: 'flex-1 px-4 py-2 bg-orange-600 text-white rounded'
+                  }, 'Save')
+                )
+              ),
+              React.createElement('div', { className: 'space-y-3' },
+                selectedTree.fruitingLogs?.length > 0 ? selectedTree.fruitingLogs.map(log =>
+                  React.createElement('div', { key: log.id, className: 'border border-orange-200 rounded p-3 bg-orange-50' },
+                    React.createElement('div', { className: 'flex justify-between mb-2' },
+                      React.createElement('div', { className: 'text-sm font-medium' },
+                        new Date(log.date).toLocaleDateString()
+                      ),
+                      React.createElement('button', {
+                        onClick: () => {
+                          setEditingFruitingId(log.id);
+                          setFruitingDate(log.date);
+                          setFruitingStatus(log.status);
+                          setFruitingPhotos(log.photos || []);
+                          setFruitingNotes(log.notes || '');
+                          setFruitingEmployee(log.employeeName);
+                          setShowFruitingForm(true);
+                        },
+                        className: 'text-blue-600'
+                      }, React.createElement(Edit2, { size: 16 }))
+                    ),
+                    log.photos?.length > 0 && React.createElement('div', { className: 'grid grid-cols-3 gap-1 mb-2' },
+                      log.photos.map((p, i) =>
+                        React.createElement('img', { key: i, src: p, alt: '', className: 'w-full h-16 object-cover rounded' })
+                      )
+                    ),
+                    React.createElement('p', { className: 'text-sm mb-1' },
+                      React.createElement('span', { className: 'font-medium' }, 'Status: '),
+                      log.status === 'no' ? 'No fruits' : log.status === 'some' ? 'Some fruits' : 'Many fruits'
+                    ),
+                    log.notes && React.createElement('p', { className: 'text-sm mb-1' }, log.notes),
+                    React.createElement('p', { className: 'text-xs text-gray-500' }, `By: ${log.employeeName}`)
+                  )
+                ) : React.createElement('p', { className: 'text-sm text-gray-500 text-center py-4' }, 'No logs')
+              )
+            )
+          )
+        )
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(React.createElement(DurianTreeTracker));
+  </script>
+</body>
+</html> 
+                      
+                       
+
+
+
